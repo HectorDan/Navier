@@ -1,0 +1,115 @@
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import cm
+import matplotlib.pyplot as plt
+import numpy as np
+%matplotlib inline
+
+nx = 41
+ny = 41
+dt = 0.001
+paro = 100
+Lx = 2
+Ly = 2
+dx = Lx/(nx-1)
+dy = Ly/(ny-1)
+x = np.linspace(0, Lx, nx)
+y = np.linspace(0, Ly, ny)
+X, Y = np.meshgrid(x,y)
+
+rho = 1
+nu = 0.1
+
+def plot3D(x, y, phi):
+  fig = plt.figure(figsize=(11,7), dpi=100)
+  ax = fig.gca(projection='3d')
+  X, Y = np.meshgrid(x,y)
+  surf = ax.plot_surface(X, Y, phi.transpose(), rstride=1, cstride=1, cmap=cm.viridis, linewidth=0, antialiased=False)
+  ax.set_xlim(0, max(x))
+  ax.set_ylim(0, max(y))
+  ax.set_xlabel("$x$")
+  ax.set_ylabel("$y$")
+  
+  def Fnij(f, u, v):
+  for i in range(1, nx-1):
+    for j in range(1, ny-1):
+      f[i,j] = ((u[1+i, j] - u[i-1, j])/(2*dx) + (v[i, j+1]- v[i, j-1])/(2*dy))/dt - (u[i+1, j] - u[i-1, j])*(u[i+1, j] - u[i-1, j])/(4*dx*dx) - 2*(u[i+1, j] - u[i-1, j])*(v[i, j+1] - v[i,j-1])/(4*dx*dy)
+  return f
+  
+  def poisson_2d(p, x, y, f, precision, n):
+  norma = 1
+  pn = np.empty_like(p)
+
+  pasos = 0
+  for k in range(paro):
+    pn = p.copy()
+    for i in range(1, len(x)-1):
+      for j in range(1, len(y)-1):
+        p[i, j] = (dy*dy*(pn[i+1, j] + pn[i-1, j]) + dx*dx*(pn[i, j+1] + pn[i, j-1]) - dx*dx*dy*dy*rho*f[i,j])/(2.0*(dx*dx + dy*dy)) #se añade el termino f
+    
+    p[:,0] = p[:,1]
+    p[:,-1] = 0
+    p[0,:] = p[1,:]
+    p[-1,:] = p[-2,:]
+
+    if np.sum(np.abs(pn[:])) == 0.0:
+      pasos = pasos + 1
+      continue
+    
+    norma = np.sum(np.abs(p[:])) - np.abs(pn[:])/np.sum(np.abs(pn[:]))
+
+    pasos = pasos + 1
+
+  #print("convergge a los", pasos, "pasos con una precision de", norma)
+  return p
+  
+  def cavidad_2D(nt, u, v, p, rho, nu):
+    un = np.empty_like(u)
+    vn = np.empty_like(v)
+    f = np.zeros((nx,ny))
+
+    for n in range(nt):
+        #print('Paso temporal nt = ',n)
+        un = u.copy()
+        vn = v.copy()
+        
+        f = Fnij(f, u , v)
+        p = poisson_2d(p,x,y,f,1e-4,n)
+
+        
+        for i in range(1,nx-1):
+            for j in range(1,ny-1):
+                u[i,j] = un[i,j] - un[i,j]*dt*(un[i,j] - un[i-1,j])/dx - vn[i,j]*dt*(un[i,j] - un[i,j-1])/dy - dt*(p[i+1,j] - p[i-1,j])/(2.0*rho*dx) + nu*dt*(un[i+1,j] - 2.0*un[i,j] + un[i-1,j])/(dx*dx)+ dt*(un[i,j+1] - 2.0*un[i, j] + un[i,j-1])/(dy*dy)                
+                v[i,j] = vn[i,j] - vn[i,j]*dt*(vn[i,j] - vn[i-1,j])/dx - vn[i,j]*dt*(vn[i,j] - vn[i,j-1])/dy - dt*(p[i,j+1] - p[i,j-1])/(2.0*rho*dy) + nu*dt*(vn[i+1,j] - 2.0*vn[i,j] + vn[i-1,j])/(dx*dx) + dt*(vn[i,j+1] - 2.0*vn[i, j] + vn[i,j-1])/(dy*dy)
+                
+                
+            
+        u[0,:] = 0.0
+        u[-1,:] = 0.0
+        u[:, 0] = 0.0
+        u[:, -1] = 1.0
+            
+        v[0,:] = 0.0
+        v[-1,:] = 0.0
+        v[:,0] = 0.0
+        v[:,-1] = 0.0
+            
+    return u, v, p
+    
+    
+    u = np.zeros((nx,ny))
+v = np.zeros((nx,ny))
+p = np.zeros((nx,ny))
+
+u, v, p = cavidad_2D(20, u, v, p, rho, nu)
+
+
+fig = plt.figure(figsize=(11,7), dpi=100)
+# plotting the pressure field as a contour
+plt.contourf(X, Y, p.transpose(), alpha=0.5, cmap=cm.viridis)  
+plt.colorbar()
+# plotting the pressure field outlines
+plt.contour(X, Y, p.transpose(), cmap=cm.viridis)  
+# plotting velocity field
+plt.quiver(X[::2, ::2], Y[::2, ::2], u[::2, ::2].transpose(), v[::2, ::2].transpose()) 
+plt.xlabel('X')
+plt.ylabel('Y')
